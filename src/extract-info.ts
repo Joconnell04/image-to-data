@@ -220,12 +220,38 @@ Preserve blank cells; for merged cells repeat value if clear, else leave blank a
       break;
     case "chart":
       modeInstructions = `
-Output in this order:
-Title (if present)
-Axes: X: <label> (<units if shown>), Y: <label> (<units if shown>)
-Legend/series names
-Data rows each as: <series>\\t<x>\\t<y> for readable points; prefix approximate values with ~.
-Notes: list uncertainties/unreadable areas; do NOT guess points not readable.
+Provide a detailed analytical extraction of this chart/graph.
+
+1. CHART TYPE & TITLE
+   - Identify chart type (scatter, line, bar, pie, etc.)
+   - Title if present
+
+2. AXES & SCALE
+   - X-axis: label, units, range (min to max), tick intervals
+   - Y-axis: label, units, range (min to max), tick intervals
+
+3. LEGEND/SERIES (list each)
+   - Name/label and color/marker for each series
+
+4. PER-SERIES TREND ANALYSIS (for EACH series/category separately):
+   - Series name/color
+   - Spatial distribution: where are points concentrated? (quadrants, ranges)
+   - Trend direction: increasing, decreasing, clustered, scattered, linear, curved
+   - Approximate centroid or center of mass (x, y coordinates)
+   - Spread/dispersion: tight cluster, elongated, dispersed
+   - Outliers: any isolated points far from the main group
+   - Relationship to other series: overlapping, separate, correlated
+
+5. OVERALL PATTERNS
+   - Correlations between series
+   - Clusters or groupings across series
+   - Notable gaps or dense regions
+
+6. KEY DATA POINTS (if readable)
+   - Format: <series>\\t<x>\\t<y> for clearly readable individual points
+   - Use ~ prefix for approximate values
+
+Be specific with coordinates and ranges. Describe each series individually before summarizing.
 `;
       break;
     case "diagram":
@@ -239,10 +265,38 @@ Extract every label exactly.
       break;
     case "general":
       modeInstructions = `
-Output:
-Short noun-phrase title/summary.
-Visible text: lines of OCR-like text in reading order.
-Key details: bullet list of important objects/regions with attributes.
+Provide detailed analytical extraction:
+
+1. TYPE & TITLE
+   - Identify what this is (chart, diagram, infographic, photo, etc.)
+   - Title/heading if present
+
+2. VISIBLE TEXT
+   - All text in reading order, preserving exact wording
+
+3. IF CHART/GRAPH - analyze EACH visual element separately:
+   - For each color/series/category:
+     * Name or label
+     * Location/distribution (coordinates, quadrants, ranges)
+     * Trend or pattern (direction, clustering, spread)
+     * Relationship to other elements
+   - Axes labels, ranges, and scales
+   - Legend entries
+
+4. IF DIAGRAM/INFOGRAPHIC:
+   - Each component with position and connections
+   - Flow direction and relationships
+
+5. QUANTITATIVE DETAILS
+   - All numbers, percentages, measurements visible
+   - Approximate values with ~ prefix if reading from visual position
+
+6. PATTERNS & INSIGHTS
+   - Key trends for each category
+   - Comparisons between elements
+   - Notable outliers or clusters
+
+Be specific about each visual element. Describe trends per category, not just overall.
 `;
       break;
   }
