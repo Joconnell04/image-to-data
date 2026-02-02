@@ -234,14 +234,34 @@ X-AXIS: [label] range [min to max]
 Y-AXIS: [label] range [min to max]
 LEGEND: [color1]=name1, [color2]=name2, ...
 
-SERIES ANALYSIS:
-- [Series1 color/name]: centered at (~x, ~y), spread=[tight/wide/elongated direction], trend=[increasing/decreasing/clustered/flat], x-range=[min,max], y-range=[min,max]
-- [Series2 color/name]: centered at (~x, ~y), spread=[tight/wide/elongated direction], trend=[increasing/decreasing/clustered/flat], x-range=[min,max], y-range=[min,max]
-[Continue for EACH series in the legend]
+SERIES ANALYSIS (for EACH series):
+- [Series color/name]: center=(~x,~y), spread=[tight/wide/elongated], x=[min,max], y=[min,max]
+  Pattern: [describe the shape/behavior - use terms like:]
+    * linear increasing/decreasing (note slope: gradual, steep, ~45°)
+    * exponential growth/decay
+    * logarithmic curve
+    * constant/flat/horizontal
+    * vertical band/spike
+    * parabolic/curved
+    * scattered/no clear pattern
+  Notable: [any of these if present:]
+    * steep drop-off at x=~[value]
+    * sharp increase at x=~[value]
+    * plateau between x=~[start] and x=~[end]
+    * inflection point at (~x, ~y)
+    * outliers at (~x, ~y)
+    * asymptotic behavior approaching y=~[value]
+    * peak/maximum at (~x, ~y)
+    * trough/minimum at (~x, ~y)
+    * discontinuity/gap at x=~[value]
 
-CROSS-SERIES PATTERNS: [Describe overlaps, separations, correlations between series]
+CROSS-SERIES PATTERNS:
+- Correlations: [positive/negative/none between which series]
+- Clusters: [where do multiple series overlap or group]
+- Separations: [clear boundaries between series]
+- Crossover points: [where series intersect, if any]
 
-You MUST describe EVERY series listed in the legend with specific coordinate ranges.
+You MUST describe EVERY series with specific coordinates and pattern characteristics.
 `;
       break;
     case "diagram":
@@ -265,11 +285,13 @@ No analysis needed - just accurate text extraction.
       modeInstructions = `
 First, identify what type of content this is.
 
-IF THIS IS A CHART/GRAPH with multiple data series or colors:
-Provide the same detailed analysis as CHART mode:
+IF THIS IS A CHART/GRAPH with data series or visual patterns:
+Analyze thoroughly with:
 - TYPE, AXES with ranges, LEGEND
-- For EACH series/color: center coordinates, spread, trend, x-range, y-range
-- Cross-series patterns
+- For EACH series/color: center, spread, coordinate ranges
+- Pattern type: linear, exponential, logarithmic, constant, scattered, etc.
+- Notable features: steep drop-offs, sharp increases, plateaus, peaks, troughs, outliers, asymptotes, inflection points, crossovers
+- Cross-series correlations and separations
 
 IF THIS IS TEXT/UI/DOCUMENT:
 Extract all visible text in reading order.
@@ -280,7 +302,7 @@ List components and their connections.
 IF THIS IS A PHOTO or other:
 Brief factual description of key elements.
 
-Analyze data visualizations thoroughly; extract text content directly.
+For data visualizations: describe mathematical patterns and notable features with coordinates.
 `;
       break;
   }
