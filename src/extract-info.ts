@@ -205,11 +205,10 @@ function safeParseRouter(text: string): RouterResult | null {
 
 async function extractFromImage(client: OpenAI, dataUrl: string, mode: Mode, prefs: Preferences): Promise<string> {
   const globalRules = [
-    "Start output directly with content. Do not begin with phrases like 'This image' or 'The image'.",
+    "Follow the format instructions EXACTLY.",
     "Extract ALL visible text exactly when readable; preserve capitalization and units.",
-    "Never invent numbers. If unreadable, output [illegible] or [uncertain].",
+    "Never invent numbers. If unreadable, output [illegible] or use ~ for approximations.",
     "No markdown code fences.",
-    "Keep output compact but complete for the selected mode.",
   ];
 
   const includeConfidenceLine = prefs.includeConfidence
@@ -227,20 +226,22 @@ Preserve blank cells; for merged cells repeat value if clear, else leave blank a
       break;
     case "chart":
       modeInstructions = `
-Extract chart data with per-series trend analysis. Be concise but specific.
+You MUST analyze this chart and provide per-series trend data. Follow this EXACT format:
 
-FORMAT:
-Type: [chart type]
-Title: [if present]
-Axes: X=[label, range], Y=[label, range]
-Legend: [list series with colors]
+TYPE: [scatter/line/bar/pie/etc]
+TITLE: [title or "none"]
+X-AXIS: [label] range [min to max]
+Y-AXIS: [label] range [min to max]
+LEGEND: [color1]=name1, [color2]=name2, ...
 
-SERIES TRENDS (one line each):
-[Color/Name]: center ~(x,y), spread [tight/wide/elongated], trend [direction], range x=[min,max] y=[min,max]
+SERIES ANALYSIS:
+- [Series1 color/name]: centered at (~x, ~y), spread=[tight/wide/elongated direction], trend=[increasing/decreasing/clustered/flat], x-range=[min,max], y-range=[min,max]
+- [Series2 color/name]: centered at (~x, ~y), spread=[tight/wide/elongated direction], trend=[increasing/decreasing/clustered/flat], x-range=[min,max], y-range=[min,max]
+[Continue for EACH series in the legend]
 
-PATTERNS: [1-2 sentences on correlations, clusters, or notable features]
+CROSS-SERIES PATTERNS: [Describe overlaps, separations, correlations between series]
 
-Use ~ for approximate values. Be specific with coordinates.
+You MUST describe EVERY series listed in the legend with specific coordinate ranges.
 `;
       break;
     case "diagram":
@@ -262,11 +263,24 @@ No analysis needed - just accurate text extraction.
       break;
     case "general":
       modeInstructions = `
-Extract content based on what's shown:
-- If mostly text/UI: extract text in reading order
-- If data visual: note type and key values
-- Brief description only if needed for context (1 line max)
-Keep output minimal and practical for pasting.
+First, identify what type of content this is.
+
+IF THIS IS A CHART/GRAPH with multiple data series or colors:
+Provide the same detailed analysis as CHART mode:
+- TYPE, AXES with ranges, LEGEND
+- For EACH series/color: center coordinates, spread, trend, x-range, y-range
+- Cross-series patterns
+
+IF THIS IS TEXT/UI/DOCUMENT:
+Extract all visible text in reading order.
+
+IF THIS IS A DIAGRAM:
+List components and their connections.
+
+IF THIS IS A PHOTO or other:
+Brief factual description of key elements.
+
+Analyze data visualizations thoroughly; extract text content directly.
 `;
       break;
   }
