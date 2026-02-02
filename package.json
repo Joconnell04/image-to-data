@@ -81,8 +81,9 @@
       "default": "auto",
       "data": [
         { "title": "Auto", "value": "auto" },
+        { "title": "Text (screenshots/UI)", "value": "text" },
         { "title": "Table", "value": "table" },
-        { "title": "Chart", "value": "chart" },
+        { "title": "Chart (with trends)", "value": "chart" },
         { "title": "Diagram", "value": "diagram" },
         { "title": "General", "value": "general" }
       ]

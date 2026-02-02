@@ -5,7 +5,7 @@ import path from "path";
 import os from "os";
 import { OpenAI } from "openai";
 
-type Mode = "table" | "chart" | "diagram" | "general";
+type Mode = "table" | "chart" | "diagram" | "text" | "general";
 
 type Preferences = {
   openaiApiKey: string;
@@ -19,6 +19,7 @@ type Preferences = {
 
 type RouterResult = {
   type: Mode;
+  complexity?: "simple" | "complex";
   format?: string;
   priorities?: string[];
 };
@@ -132,8 +133,13 @@ async function decideMode(client: OpenAI, dataUrl: string, prefs: Preferences): 
   }
 
   const systemPrompt = "You are a routing function. Return ONLY valid minified JSON. No prose.";
-  const userPrompt =
-    "Classify this clipboard image into one pipeline: table, chart, diagram, or general. Choose the one that maximizes extraction accuracy. Return JSON with keys: type, format, priorities (array of strings).";
+  const userPrompt = `Classify this image for data extraction. Return JSON with:
+- type: "text" (screenshot with mostly text/UI), "table" (structured rows/columns), "chart" (graphs with data series/trends), "diagram" (flowcharts/architecture), or "general" (photos/mixed)
+- complexity: "simple" (basic text extraction needed) or "complex" (multiple series, trends, relationships to analyze)
+
+Choose "text" for: app screenshots, documents, code, UI with text, simple lists.
+Choose "chart" with complexity "complex" for: scatter plots, multi-series graphs, charts with trends to analyze.
+Return: {"type":"...","complexity":"..."}`;
 
   try {
     const response = await client.responses.create({
@@ -166,6 +172,7 @@ async function decideMode(client: OpenAI, dataUrl: string, prefs: Preferences): 
       parsed?.type === "table" ||
       parsed?.type === "chart" ||
       parsed?.type === "diagram" ||
+      parsed?.type === "text" ||
       parsed?.type === "general"
     ) {
       return parsed.type;
@@ -220,83 +227,46 @@ Preserve blank cells; for merged cells repeat value if clear, else leave blank a
       break;
     case "chart":
       modeInstructions = `
-Provide a detailed analytical extraction of this chart/graph.
+Extract chart data with per-series trend analysis. Be concise but specific.
 
-1. CHART TYPE & TITLE
-   - Identify chart type (scatter, line, bar, pie, etc.)
-   - Title if present
+FORMAT:
+Type: [chart type]
+Title: [if present]
+Axes: X=[label, range], Y=[label, range]
+Legend: [list series with colors]
 
-2. AXES & SCALE
-   - X-axis: label, units, range (min to max), tick intervals
-   - Y-axis: label, units, range (min to max), tick intervals
+SERIES TRENDS (one line each):
+[Color/Name]: center ~(x,y), spread [tight/wide/elongated], trend [direction], range x=[min,max] y=[min,max]
 
-3. LEGEND/SERIES (list each)
-   - Name/label and color/marker for each series
+PATTERNS: [1-2 sentences on correlations, clusters, or notable features]
 
-4. PER-SERIES TREND ANALYSIS (for EACH series/category separately):
-   - Series name/color
-   - Spatial distribution: where are points concentrated? (quadrants, ranges)
-   - Trend direction: increasing, decreasing, clustered, scattered, linear, curved
-   - Approximate centroid or center of mass (x, y coordinates)
-   - Spread/dispersion: tight cluster, elongated, dispersed
-   - Outliers: any isolated points far from the main group
-   - Relationship to other series: overlapping, separate, correlated
-
-5. OVERALL PATTERNS
-   - Correlations between series
-   - Clusters or groupings across series
-   - Notable gaps or dense regions
-
-6. KEY DATA POINTS (if readable)
-   - Format: <series>\\t<x>\\t<y> for clearly readable individual points
-   - Use ~ prefix for approximate values
-
-Be specific with coordinates and ranges. Describe each series individually before summarizing.
+Use ~ for approximate values. Be specific with coordinates.
 `;
       break;
     case "diagram":
       modeInstructions = `
-Output:
-Components: bullet list of main objects/regions.
-Labels: each as '<label text> -> <what it points to/describes>'.
-Relationships: bullet list 'A -> B (label if present)' for arrows/flows.
-Extract every label exactly.
+Extract diagram structure concisely:
+Components: bullet list of main elements
+Connections: A -> B (label) for each relationship
+Labels: extract all text exactly
+`;
+      break;
+    case "text":
+      modeInstructions = `
+Extract all visible text in reading order.
+Preserve formatting, line breaks, and hierarchy where apparent.
+For UI elements: [Button: "label"] or [Menu: item1, item2]
+For code: preserve indentation exactly.
+No analysis needed - just accurate text extraction.
 `;
       break;
     case "general":
       modeInstructions = `
-Provide detailed analytical extraction:
-
-1. TYPE & TITLE
-   - Identify what this is (chart, diagram, infographic, photo, etc.)
-   - Title/heading if present
-
-2. VISIBLE TEXT
-   - All text in reading order, preserving exact wording
-
-3. IF CHART/GRAPH - analyze EACH visual element separately:
-   - For each color/series/category:
-     * Name or label
-     * Location/distribution (coordinates, quadrants, ranges)
-     * Trend or pattern (direction, clustering, spread)
-     * Relationship to other elements
-   - Axes labels, ranges, and scales
-   - Legend entries
-
-4. IF DIAGRAM/INFOGRAPHIC:
-   - Each component with position and connections
-   - Flow direction and relationships
-
-5. QUANTITATIVE DETAILS
-   - All numbers, percentages, measurements visible
-   - Approximate values with ~ prefix if reading from visual position
-
-6. PATTERNS & INSIGHTS
-   - Key trends for each category
-   - Comparisons between elements
-   - Notable outliers or clusters
-
-Be specific about each visual element. Describe trends per category, not just overall.
+Extract content based on what's shown:
+- If mostly text/UI: extract text in reading order
+- If data visual: note type and key values
+- Brief description only if needed for context (1 line max)
+Keep output minimal and practical for pasting.
 `;
       break;
   }
