@@ -1,3 +1,7 @@
+Note: unofficial Raycast extension
+
+Reason: needed a quicker way to extract info from a complex graph/chart that relied on OCR as well as vision models to produce a high-quality text description of an image.
+
 # Image to Data
 
 Extract structured text from screenshots using OpenAI vision models. Capture any area of your screen and get clean, formatted text output—perfect for tables, charts, diagrams, and more.
