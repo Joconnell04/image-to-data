@@ -28,23 +28,9 @@
       "placeholder": "sk-..."
     },
     {
-      "name": "routerModel",
-      "type": "dropdown",
-      "title": "Router Model",
-      "description": "OpenAI model used for routing",
-      "required": true,
-      "default": "gpt-5-mini",
-      "data": [
-        { "title": "gpt-5-mini", "value": "gpt-5-mini" },
-        { "title": "gpt-5.2", "value": "gpt-5.2" },
-        { "title": "gpt-5", "value": "gpt-5" },
-        { "title": "gpt-4.1", "value": "gpt-4.1" }
-      ]
-    },
-    {
       "name": "extractModel",
       "type": "dropdown",
-      "title": "Extractor Model",
+      "title": "Model",
       "description": "OpenAI model used for extraction",
       "required": true,
       "default": "gpt-5.2",

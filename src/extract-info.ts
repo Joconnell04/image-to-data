@@ -9,19 +9,11 @@ type Mode = "table" | "chart" | "diagram" | "text" | "general";
 
 type Preferences = {
   openaiApiKey: string;
-  routerModel: string;
   extractModel: string;
   maxOutputChars: string;
   includeConfidence?: boolean;
   forceMode: "auto" | Mode;
   debugLogging?: boolean;
-};
-
-type RouterResult = {
-  type: Mode;
-  complexity?: "simple" | "complex";
-  format?: string;
-  priorities?: string[];
 };
 
 // Type for OpenAI Responses API output
@@ -53,15 +45,13 @@ export default async function main() {
     const dataUrl = await imageFileToDataUrl(imagePath);
     const client = new OpenAI({ apiKey: prefs.openaiApiKey });
 
-    const mode = await decideMode(client, dataUrl, prefs);
-    const raw = await extractFromImage(client, dataUrl, mode, prefs);
+    const raw = await extractFromImage(client, dataUrl, prefs);
     const finalText = sanitizeOutput(raw, maxChars, prefs.includeConfidence);
 
     await Clipboard.copy(finalText);
     await showToast({
       style: Toast.Style.Success,
       title: "Copied extracted text",
-      message: `Mode: ${mode}`,
     });
 
     // Clean up temp file
@@ -127,83 +117,7 @@ function extToMime(ext: string): string | null {
   }
 }
 
-async function decideMode(client: OpenAI, dataUrl: string, prefs: Preferences): Promise<Mode> {
-  if (prefs.forceMode !== "auto") {
-    return prefs.forceMode;
-  }
-
-  const systemPrompt = "You are a routing function. Return ONLY valid minified JSON. No prose.";
-  const userPrompt = `Classify this image for data extraction. Return JSON with:
-- type: "text" (screenshot with mostly text/UI), "table" (structured rows/columns), "chart" (graphs with data series/trends), "diagram" (flowcharts/architecture), or "general" (photos/mixed)
-- complexity: "simple" (basic text extraction needed) or "complex" (multiple series, trends, relationships to analyze)
-
-Choose "text" for: app screenshots, documents, code, UI with text, simple lists.
-Choose "chart" with complexity "complex" for: scatter plots, multi-series graphs, charts with trends to analyze.
-Return: {"type":"...","complexity":"..."}`;
-
-  try {
-    const response = await client.responses.create({
-      model: prefs.routerModel,
-      temperature: 0,
-      max_output_tokens: 200,
-      input: [
-        {
-          role: "system",
-          content: [{ type: "input_text", text: systemPrompt }],
-        },
-        {
-          role: "user",
-          content: [
-            { type: "input_text", text: userPrompt },
-            { type: "input_image", image_url: dataUrl },
-          ],
-        },
-      ],
-    });
-
-    const typedResp = response as unknown as OpenAIResponseOutput;
-    const text = typedResp.output_text ?? typedResp.output?.[0]?.content?.[0]?.text ?? "";
-    const parsed = safeParseRouter(text);
-    if (prefs.debugLogging) {
-      console.log("Router raw:", text);
-      console.log("Router parsed:", parsed);
-    }
-    if (
-      parsed?.type === "table" ||
-      parsed?.type === "chart" ||
-      parsed?.type === "diagram" ||
-      parsed?.type === "text" ||
-      parsed?.type === "general"
-    ) {
-      return parsed.type;
-    }
-  } catch (error) {
-    if (prefs.debugLogging) {
-      console.error("Router error", error);
-    }
-  }
-
-  return "general";
-}
-
-function safeParseRouter(text: string): RouterResult | null {
-  try {
-    return JSON.parse(text) as RouterResult;
-  } catch {
-    // Try to extract JSON substring
-    const match = text.match(/\{.*\}/s);
-    if (match) {
-      try {
-        return JSON.parse(match[0]) as RouterResult;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  }
-}
-
-async function extractFromImage(client: OpenAI, dataUrl: string, mode: Mode, prefs: Preferences): Promise<string> {
+async function extractFromImage(client: OpenAI, dataUrl: string, prefs: Preferences): Promise<string> {
   const globalRules = [
     "Follow the format instructions EXACTLY.",
     "Extract ALL visible text exactly when readable; preserve capitalization and units.",
@@ -215,96 +129,15 @@ async function extractFromImage(client: OpenAI, dataUrl: string, mode: Mode, pre
     ? "End with a single line: Confidence: high|medium|low (choose based on legibility)."
     : "";
 
-  let modeInstructions = "";
-  switch (mode) {
-    case "table":
-      modeInstructions = `
-Output TSV only (tabs between cells, newline between rows).
-If header exists, include it as first row.
-Preserve blank cells; for merged cells repeat value if clear, else leave blank and add final line 'Notes: merged cells present'.
-`;
-      break;
-    case "chart":
-      modeInstructions = `
-You MUST analyze this chart and provide per-series trend data. Follow this EXACT format:
+  // Build the prompt based on forceMode
+  let userPrompt: string;
 
-TYPE: [scatter/line/bar/pie/etc]
-TITLE: [title or "none"]
-X-AXIS: [label] range [min to max]
-Y-AXIS: [label] range [min to max]
-LEGEND: [color1]=name1, [color2]=name2, ...
-
-SERIES ANALYSIS (for EACH series):
-- [Series color/name]: center=(~x,~y), spread=[tight/wide/elongated], x=[min,max], y=[min,max]
-  Pattern: [describe the shape/behavior - use terms like:]
-    * linear increasing/decreasing (note slope: gradual, steep, ~45°)
-    * exponential growth/decay
-    * logarithmic curve
-    * constant/flat/horizontal
-    * vertical band/spike
-    * parabolic/curved
-    * scattered/no clear pattern
-  Notable: [any of these if present:]
-    * steep drop-off at x=~[value]
-    * sharp increase at x=~[value]
-    * plateau between x=~[start] and x=~[end]
-    * inflection point at (~x, ~y)
-    * outliers at (~x, ~y)
-    * asymptotic behavior approaching y=~[value]
-    * peak/maximum at (~x, ~y)
-    * trough/minimum at (~x, ~y)
-    * discontinuity/gap at x=~[value]
-
-CROSS-SERIES PATTERNS:
-- Correlations: [positive/negative/none between which series]
-- Clusters: [where do multiple series overlap or group]
-- Separations: [clear boundaries between series]
-- Crossover points: [where series intersect, if any]
-
-You MUST describe EVERY series with specific coordinates and pattern characteristics.
-`;
-      break;
-    case "diagram":
-      modeInstructions = `
-Extract diagram structure concisely:
-Components: bullet list of main elements
-Connections: A -> B (label) for each relationship
-Labels: extract all text exactly
-`;
-      break;
-    case "text":
-      modeInstructions = `
-Extract all visible text in reading order.
-Preserve formatting, line breaks, and hierarchy where apparent.
-For UI elements: [Button: "label"] or [Menu: item1, item2]
-For code: preserve indentation exactly.
-No analysis needed - just accurate text extraction.
-`;
-      break;
-    case "general":
-      modeInstructions = `
-First, identify what type of content this is.
-
-IF THIS IS A CHART/GRAPH with data series or visual patterns:
-Analyze thoroughly with:
-- TYPE, AXES with ranges, LEGEND
-- For EACH series/color: center, spread, coordinate ranges
-- Pattern type: linear, exponential, logarithmic, constant, scattered, etc.
-- Notable features: steep drop-offs, sharp increases, plateaus, peaks, troughs, outliers, asymptotes, inflection points, crossovers
-- Cross-series correlations and separations
-
-IF THIS IS TEXT/UI/DOCUMENT:
-Extract all visible text in reading order.
-
-IF THIS IS A DIAGRAM:
-List components and their connections.
-
-IF THIS IS A PHOTO or other:
-Brief factual description of key elements.
-
-For data visualizations: describe mathematical patterns and notable features with coordinates.
-`;
-      break;
+  if (prefs.forceMode !== "auto") {
+    // Use specific mode instructions when forced
+    userPrompt = getForcedModePrompt(prefs.forceMode);
+  } else {
+    // Use unified auto-detect prompt
+    userPrompt = getUnifiedPrompt();
   }
 
   const systemPrompt = [
@@ -314,8 +147,6 @@ For data visualizations: describe mathematical patterns and notable features wit
   ]
     .filter(Boolean)
     .join("\n");
-
-  const userPrompt = `Mode: ${mode.toUpperCase()}\n${modeInstructions}\nReturn the extracted content now.`;
 
   const response = await client.responses.create({
     model: prefs.extractModel,
@@ -338,7 +169,116 @@ For data visualizations: describe mathematical patterns and notable features wit
 
   const typedResp = response as unknown as OpenAIResponseOutput;
   const text = typedResp.output_text ?? typedResp.output?.[0]?.content?.[0]?.text ?? "";
+
+  if (prefs.debugLogging) {
+    console.log("Extraction result:", text.substring(0, 500));
+  }
+
   return text;
+}
+
+function getForcedModePrompt(mode: Mode): string {
+  switch (mode) {
+    case "table":
+      return `Extract the TABLE from this image.
+
+Output TSV only (tabs between cells, newline between rows).
+If header exists, include it as first row.
+Preserve blank cells; for merged cells repeat value if clear, else leave blank.
+Add 'Notes: merged cells present' only if applicable.`;
+
+    case "chart":
+      return `Analyze this CHART/GRAPH in detail.
+
+${getChartInstructions()}`;
+
+    case "diagram":
+      return `Extract this DIAGRAM's structure.
+
+Components: bullet list of main elements
+Connections: A -> B (label) for each relationship
+Labels: extract all text exactly`;
+
+    case "text":
+      return `Extract all visible TEXT from this image.
+
+Extract in reading order. Preserve formatting, line breaks, and hierarchy.
+For UI elements: [Button: "label"] or [Menu: item1, item2]
+For code: preserve indentation exactly.
+Just extract the text accurately - no analysis needed.`;
+
+    case "general":
+      return getUnifiedPrompt();
+  }
+}
+
+function getChartInstructions(): string {
+  return `Report in this EXACT format:
+
+TYPE: [scatter/line/bar/pie/area/histogram/etc]
+TITLE: [title or "none"]
+X-AXIS: [label] range [min to max]
+Y-AXIS: [label] range [min to max]
+LEGEND: [color1]=name1, [color2]=name2, ...
+
+SERIES ANALYSIS (for EACH visible series/color):
+- [Series name/color]: center=(~x,~y), spread=[tight/wide/elongated], x=[min,max], y=[min,max]
+  Pattern: [describe using these terms as applicable:]
+    • linear increasing/decreasing (slope: gradual/steep/~45°)
+    • exponential growth/decay
+    • logarithmic curve
+    • constant/flat/horizontal
+    • vertical band/spike
+    • parabolic/curved
+    • scattered/no clear pattern
+  Notable: [include any of these if present:]
+    • steep drop-off at x≈[value]
+    • sharp increase at x≈[value]
+    • plateau between x≈[start] and x≈[end]
+    • inflection point at (~x,~y)
+    • outliers at (~x,~y)
+    • asymptotic behavior approaching y≈[value]
+    • peak/maximum at (~x,~y)
+    • trough/minimum at (~x,~y)
+    • discontinuity/gap at x≈[value]
+
+CROSS-SERIES PATTERNS:
+- Correlations: [positive/negative/none between which series]
+- Clusters: [where multiple series overlap or group]
+- Separations: [clear boundaries between series]
+- Crossovers: [where series intersect, with coordinates]
+
+Describe EVERY series with specific coordinates and pattern characteristics.`;
+}
+
+function getUnifiedPrompt(): string {
+  return `Analyze this image and extract its content. First, silently identify the content type, then apply the appropriate extraction strategy.
+
+═══ IF TEXT/UI/SCREENSHOT (documents, code, app UI, messages, articles) ═══
+Extract all visible text in reading order.
+Preserve formatting, line breaks, and hierarchy.
+For UI: [Button: "label"], [Menu: item1, item2]
+For code: preserve indentation exactly.
+Keep it simple - just accurate text extraction.
+
+═══ IF TABLE (structured rows and columns of data) ═══
+Output TSV format only (tabs between cells, newlines between rows).
+Include header row if present.
+Preserve blank cells; note merged cells if present.
+
+═══ IF CHART/GRAPH (data visualization with axes, series, trends) ═══
+${getChartInstructions()}
+
+═══ IF DIAGRAM (flowcharts, architecture, process flows, org charts) ═══
+Components: bullet list of main elements
+Connections: A -> B (label) for each relationship
+Labels: extract all text exactly
+
+═══ IF PHOTO/OTHER (photographs, artwork, mixed content) ═══
+Brief factual description of key visible elements.
+Extract any visible text.
+
+IMPORTANT: Match your response complexity to the content. Simple text screenshots need simple extraction. Complex charts need detailed analysis with coordinates. Do not over-analyze simple content or under-analyze data visualizations.`;
 }
 
 function sanitizeOutput(text: string, maxChars: number, includeConfidence?: boolean): string {
